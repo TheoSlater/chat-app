@@ -27,6 +27,8 @@ export default function Chat() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [darkMode, setDarkMode] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<string[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -51,7 +53,16 @@ export default function Chat() {
           .order("timestamp", { ascending: true });
 
         if (fetchError) throw fetchError;
-        setMessages(data || []);
+
+        // Filter messages to show only relevant ones
+        const filteredMessages = (data || []).filter(
+          (msg) =>
+            !msg.recipient_name || // public messages
+            msg.recipient_name === name || // messages to current user
+            msg.sender_name === name // messages from current user
+        );
+
+        setMessages(filteredMessages);
 
         // Set up realtime channel
         const channel = supabase
@@ -65,11 +76,27 @@ export default function Chat() {
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "messages" },
             (payload) => {
-              setMessages((prev) => [...prev, payload.new as Message]);
+              const newMessage = payload.new as Message;
+              if (
+                !newMessage.recipient_name ||
+                newMessage.recipient_name === name ||
+                newMessage.sender_name === name
+              ) {
+                setMessages((prev) => [...prev, newMessage]);
+              }
             }
           )
           .on("presence", { event: "sync" }, () => {
             const state = channel.presenceState();
+
+            // Update online users
+            const onlineUsers = Object.values(state)
+              .flat()
+              .map((user: any) => user.username)
+              .filter((username) => username !== name);
+            setUsers(onlineUsers);
+
+            // Update typing users
             const typingUsersList = Object.values(state)
               .flat()
               .filter((user: any) => user.isTyping)
@@ -80,6 +107,13 @@ export default function Chat() {
 
         channelRef.current = channel;
         await channel.subscribe();
+
+        // Track presence
+        await channel.track({
+          username: name,
+          isTyping: false,
+          online_at: new Date().toISOString(),
+        });
       } catch (err: any) {
         setError(err.message);
       }
@@ -89,6 +123,7 @@ export default function Chat() {
 
     return () => {
       if (channelRef.current) {
+        channelRef.current.untrack();
         supabase.removeChannel(channelRef.current);
       }
     };
@@ -106,6 +141,7 @@ export default function Chat() {
       const { error: sendError } = await supabase.from("messages").insert([
         {
           sender_name: name,
+          recipient_name: selectedUser,
           message: input.trim(),
           timestamp: new Date().toISOString(),
         },
@@ -143,6 +179,10 @@ export default function Chat() {
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const handleUserSelect = (user: string | null) => {
+    setSelectedUser(user);
   };
 
   return (
@@ -198,6 +238,9 @@ export default function Chat() {
             onClear={clearChat}
             onKeyPress={handleKeyPress}
             messagesEndRef={messagesEndRef}
+            users={users}
+            selectedUser={selectedUser}
+            onUserSelect={handleUserSelect}
           />
         )}
       </Box>

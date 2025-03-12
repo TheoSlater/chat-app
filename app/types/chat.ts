@@ -1,6 +1,7 @@
 export interface Message {
   id: number;
   sender_name: string;
+  recipient_name?: string | null; // null means public message
   message: string;
   timestamp: string;
 }
@@ -21,4 +22,7 @@ export interface ChatProps {
   onClear: () => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   onKeyPress: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  users: string[];
+  selectedUser: string | null;
+  onUserSelect: (user: string | null) => void;
 }

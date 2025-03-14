@@ -2,6 +2,7 @@ export interface Message {
   id: number;
   sender_name: string;
   recipient_name?: string | null; // null means public message
+  room_id: string;
   message: string;
   timestamp: string;
 }

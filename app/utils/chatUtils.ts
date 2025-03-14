@@ -11,3 +11,7 @@ export function generateAvatarColor(name: string): string {
   }
   return color;
 }
+
+export const generateRoomId = (user1: string, user2: string): string => {
+  return [user1, user2].sort().join(":");
+};
